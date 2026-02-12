@@ -8,37 +8,43 @@ The `csv_to_root_cmssw.C` macro is optimized to work smoothly in CMSSW environme
 # Set up CMSSW environment
 cmsenv
 
-# Convert your parquet file (if needed)
-python3 -c "
-import pandas as pd
-df = pd.read_parquet('input.parquet')
-df.to_csv('input.csv', index=False)
-"
+# Step 1: Convert parquet to CSV (using CMSSW-compatible Python script)
+python3 parquet_to_csv_cmssw.py input.parquet input.csv
 
-# Convert CSV to ROOT using the CMSSW-compatible macro
+# Step 2: Convert CSV to ROOT using the CMSSW-compatible macro
 root -l -b -q 'csv_to_root_cmssw.C("input.csv", "output.root", "Events")'
 ```
 
 That's it! The output ROOT file will work seamlessly with CMSSW tools and other ROOT analysis frameworks.
 
-## Two Usage Modes
+Both scripts are designed to work smoothly in the CMSSW environment without issues.
 
-### Mode 1: Interactive ROOT (in CMSSW)
+## Complete Workflow
+
+### Step 1: Parquet to CSV (Python)
 
 ```bash
 cmsenv
+python3 parquet_to_csv_cmssw.py input.parquet input.csv
+```
+
+Features:
+- Clean, informative output
+- Automatic error handling
+- Verifies output file
+- Handles both pandas and pyarrow backends
+
+### Step 2: CSV to ROOT (Interactive)
+
+```bash
 root -l -b -q 'csv_to_root_cmssw.C("input.csv", "output.root", "Events")'
 ```
 
-### Mode 2: Compile as Standalone Executable
-
-For batch jobs or when you want a compiled binary:
+Or compile as executable for batch jobs:
 
 ```bash
 cmsenv
 g++ -o csv_to_root csv_to_root_cmssw.C $(root-config --cflags --libs)
-
-# Then run it
 ./csv_to_root input.csv output.root Events
 ```
 
@@ -64,26 +70,23 @@ cmsenv
 mkdir -p Analysis/Data
 cd Analysis/Data
 
-# Convert input
-python3 << 'EOF'
-import pandas as pd
-df = pd.read_parquet('/path/to/events.parquet')
-df.to_csv('events.csv', index=False)
-print('Converted to events.csv')
-EOF
+# Step 1: Convert parquet to CSV
+python3 parquet_to_csv_cmssw.py /path/to/events.parquet events.csv
 
-# Convert to ROOT
-root -l -b -q '$(git root)/parquet_example/csv_to_root_cmssw.C("events.csv", "events.root", "Events")'
+# Step 2: Convert CSV to ROOT
+root -l -b -q 'csv_to_root_cmssw.C("events.csv", "events.root", "Events")'
 
-# Now use in your analysis
+# Step 3: Use in your analysis
 root -l events.root
 root [1] TTree *t = (TTree*)_file0->Get("Events");
 root [2] t->Draw("mass");
 ```
 
-## Compiling for Batch Jobs
+Both Python and C++ scripts are CMSSW-friendly and will work without issues.
 
-Create a job script (`convert.sh`):
+## Batch Job Example
+
+Create a job script (`convert_batch.sh`):
 
 ```bash
 #!/bin/bash
@@ -91,16 +94,27 @@ source /cvmfs/cms.cern.ch/cmsset_default.sh
 cd /path/to/CMSSW/src
 cmsenv
 
-# Compile converter once
+# Compile C++ converter (one-time)
 if [ ! -f csv_to_root ]; then
     g++ -o csv_to_root csv_to_root_cmssw.C $(root-config --cflags --libs)
 fi
 
-# Convert files
+# Convert: parquet -> CSV -> ROOT
+python3 parquet_to_csv_cmssw.py input.parquet input.csv
 ./csv_to_root input.csv output.root Events
+
+echo "Done! Output: output.root"
 ```
 
-Submit to HTCondor or lxbatch as usual.
+Submit to HTCondor or lxbatch:
+
+```bash
+# HTCondor
+condor_submit job.sub
+
+# lxbatch
+bsub -q 1nh convert_batch.sh
+```
 
 ## Performance Tips
 
